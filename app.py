@@ -20,36 +20,46 @@ def calcular():
         ns = {'g': 'http://base.google.com/ns/1.0'}
         
         recomendaciones = []
+        productos_descartados = []
 
         for item in root.findall('.//item'):
-            # Capturamos todo el texto para identificar el modelo
+            # Buscamos en todas las etiquetas posibles el texto
             texto_todo = " ".join([elem.text for elem in item.iter() if elem.text]).upper()
             
-            # Filtro estricto: Debe ser EcoFlow y NO ser accesorio/merchandising
-            if "ECOFLOW" in texto_todo:
-                if any(x in texto_todo for x in ["TERMO", "MUG", "BOLSO", "CABLE", "FUNDA", "PANEL", "SOLAR", "ADAPTADOR", "CHASIS"]):
+            if "ECOFLOW" in texto_todo or "RIVER" in texto_todo or "DELTA" in texto_todo:
+                # 1. Filtro de accesorios
+                if any(x in texto_todo for x in ["TERMO", "MUG", "BOLSO", "CABLE", "FUNDA", "BOLSA", "CHASIS"]):
                     continue
 
-                # Extraer Precio para filtrar por valor (las estaciones valen más de 100.000 generalmente)
+                # 2. Captura de precio
                 precio_raw = item.find('g:price', ns).text if item.find('g:price', ns) is not None else "0"
-                # Limpiamos el precio para convertirlo a número (ej: "24990.0 CLP" -> 24990)
                 try:
+                    # Extraer solo el número (ej: "123456.0 CLP")
                     valor_precio = float(precio_raw.split()[0])
                 except:
                     valor_precio = 0
 
-                if valor_precio < 150000: # Si vale menos de 150k, probablemente no es una estación
+                # 3. Solo productos de más de $100.000 (para asegurar que sean estaciones)
+                if valor_precio < 100000:
                     continue
 
-                # Identificación de Capacidad
+                # 4. Clasificación por modelo
                 wh, watts_max, nombre_bonito = 256, 300, "EcoFlow River 2"
                 
-                if "PRO 2" in texto_todo or "PRO2" in texto_todo: wh, watts_max, nombre_bonito = 4096, 4000, "EcoFlow Delta Pro 2"
-                elif "DELTA 3" in texto_todo: wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta 3"
-                elif "DELTA 2" in texto_todo: wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta 2"
-                elif "RIVER 2 PRO" in texto_todo: wh, watts_max, nombre_bonito = 768, 800, "EcoFlow River 2 Pro"
-                elif "RIVER 2 MAX" in texto_todo: wh, watts_max, nombre_bonito = 512, 500, "EcoFlow River 2 Max"
+                if "PRO 2" in texto_todo or "PRO2" in texto_todo: 
+                    wh, watts_max, nombre_bonito = 4096, 4000, "EcoFlow Delta Pro 2"
+                elif "DELTA 3" in texto_todo: 
+                    wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta 3"
+                elif "DELTA 2" in texto_todo: 
+                    wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta 2"
+                elif "RIVER 2 PRO" in texto_todo: 
+                    wh, watts_max, nombre_bonito = 768, 800, "EcoFlow River 2 Pro"
+                elif "RIVER 2 MAX" in texto_todo: 
+                    wh, watts_max, nombre_bonito = 512, 500, "EcoFlow River 2 Max"
+                elif "DELTA" in texto_todo:
+                    wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta Series"
 
+                # 5. Filtro por potencia del usuario
                 if watts_max >= w_usuario:
                     duracion = (wh * 0.85) / max(w_usuario, 1)
                     recomendaciones.append({
@@ -60,11 +70,11 @@ def calcular():
                         "url_producto": item.find('link').text,
                         "wh": wh
                     })
+                else:
+                    productos_descartados.append(f"{nombre_bonito} (Soporta {watts_max}W)")
 
-        # Ordenar por capacidad y eliminar duplicados de nombre
+        # Limpiar duplicados y ordenar
         recomendaciones.sort(key=lambda x: x['wh'])
-        
-        # Filtrar duplicados (por si el XML tiene el mismo producto dos veces)
         vistos = set()
         unicos = []
         for r in recomendaciones:
@@ -72,9 +82,16 @@ def calcular():
                 unicos.append(r)
                 vistos.add(r['nombre'])
 
-        return jsonify({"status": "ok", "recomendaciones": unicos[:3]})
+        print(f"DEBUG: Recomendados: {len(unicos)} | Descartados por potencia: {len(productos_descartados)}")
+        
+        return jsonify({
+            "status": "ok", 
+            "recomendaciones": unicos[:3],
+            "debug_info": {"descartados": productos_descartados[:5]}
+        })
 
     except Exception as e:
+        print(f"ERROR: {str(e)}")
         return jsonify({"status": "error", "mensaje": str(e)}), 500
 
 if __name__ == '__main__':
