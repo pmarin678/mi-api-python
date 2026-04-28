@@ -9,14 +9,14 @@ CORS(app)
 
 XML_URL = "https://s3.amazonaws.com/bsalemarket/facebook_xml/59518/112_59518.xml"
 
-# Datos técnicos simplificados
+# Base de datos con palabras clave simplificadas para asegurar el match
 CAPACIDADES = [
-    {"key": "DELTA PRO", "wh": 3600, "watts": 3600},
-    {"key": "DELTA 3", "wh": 1024, "watts": 1800},
-    {"key": "DELTA 2", "wh": 1024, "watts": 1800},
-    {"key": "RIVER 2 MAX", "wh": 512, "watts": 500},
-    {"key": "RIVER 2 PRO", "wh": 768, "watts": 800},
-    {"key": "RIVER 2", "wh": 256, "watts": 300}
+    {"search": ["DELTA", "PRO", "2"], "wh": 4096, "watts": 4000, "label": "Delta Pro 2"},
+    {"search": ["DELTA", "3"], "wh": 1024, "watts": 1800, "label": "Delta 3"},
+    {"search": ["RIVER", "MAX"], "wh": 512, "watts": 500, "label": "River 2 Max"},
+    {"search": ["RIVER", "PRO"], "wh": 768, "watts": 800, "label": "River 2 Pro"},
+    {"search": ["RIVER", "2"], "wh": 256, "watts": 300, "label": "River 2"},
+    {"search": ["DELTA", "2"], "wh": 1024, "watts": 1800, "label": "Delta 2"}
 ]
 
 @app.route('/calcular', methods=['POST'])
@@ -26,31 +26,32 @@ def calcular():
         w_usuario = float(datos.get('watts', 0))
         h_usuario = float(datos.get('horas', 0))
         
-        # Simular navegador para evitar bloqueos de Amazon S3
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(XML_URL, headers=headers, timeout=20)
-        
-        # Parsear el XML
         root = ET.fromstring(response.content)
-        # Namespace de Google
         ns = {'g': 'http://base.google.com/ns/1.0'}
         
         recomendaciones = []
-        encontrados_en_xml = 0
 
         for item in root.findall('.//item'):
-            titulo = item.find('title').text.upper() if item.find('title') is not None else ""
-            encontrados_en_xml += 1
+            # Obtenemos el título y lo limpiamos
+            titulo_raw = item.find('title').text if item.find('title') is not None else ""
+            titulo = titulo_raw.upper()
             
-            # Filtro ultra básico: solo buscamos la palabra clave
-            if "ECOFLOW" in titulo:
+            # FILTRO: Si el título contiene "ECOFLOW" o "RIVER" o "DELTA"
+            if any(word in titulo for word in ["ECOFLOW", "RIVER", "DELTA"]):
+                # Ignorar accesorios obvios
+                if any(acc in titulo for acc in ["PANEL", "CABLE", "BOLSO", "SOLAR", "FUNDA"]):
+                    continue
+                
                 for mod in CAPACIDADES:
-                    if mod["key"] in titulo:
-                        # Si encontramos el modelo, calculamos sin filtros de hora para probar
+                    # Si todas las palabras de búsqueda están en el título
+                    if all(k in titulo for k in mod["search"]):
+                        duracion = (mod["wh"] * 0.85) / w_usuario
+                        
                         if mod["watts"] >= w_usuario:
-                            duracion = (mod["wh"] * 0.85) / w_usuario
                             recomendaciones.append({
-                                "nombre": item.find('title').text,
+                                "nombre": titulo_raw,
                                 "duracion_estimada": round(duracion, 1),
                                 "precio": item.find('g:price', ns).text if item.find('g:price', ns) is not None else "Ver web",
                                 "precio_oferta": item.find('g:sale_price', ns).text if item.find('g:sale_price', ns) is not None else None,
@@ -60,16 +61,15 @@ def calcular():
                             })
                             break
 
-        # Ordenar por capacidad
         recomendaciones.sort(key=lambda x: x['wh'])
         
-        # LOG DE DEPURACIÓN (Míralo en Railway)
-        print(f"DEBUG: XML leido. Total items: {encontrados_en_xml}. EcoFlows aptos: {len(recomendaciones)}")
-
+        # Este print es vital para ver qué pasó en los logs
+        print(f"DEBUG: Encontrados {len(recomendaciones)} productos EcoFlow aptos.")
+        
         return jsonify({"status": "ok", "recomendaciones": recomendaciones[:3]})
 
     except Exception as e:
-        print(f"ERROR CRITICO: {str(e)}")
+        print(f"ERROR: {str(e)}")
         return jsonify({"status": "error", "mensaje": str(e)}), 500
 
 if __name__ == '__main__':
