@@ -20,58 +20,75 @@ def calcular():
         ns = {'g': 'http://base.google.com/ns/1.0'}
         
         recomendaciones = []
-        productos_descartados = []
 
         for item in root.findall('.//item'):
-            # Buscamos en todas las etiquetas posibles el texto
-            texto_todo = " ".join([elem.text for elem in item.iter() if elem.text]).upper()
-            
-            if "ECOFLOW" in texto_todo or "RIVER" in texto_todo or "DELTA" in texto_todo:
-                # 1. Filtro de accesorios
-                if any(x in texto_todo for x in ["TERMO", "MUG", "BOLSO", "CABLE", "FUNDA", "BOLSA", "CHASIS"]):
-                    continue
-
-                # 2. Captura de precio
-                precio_raw = item.find('g:price', ns).text if item.find('g:price', ns) is not None else "0"
-                try:
-                    # Extraer solo el número (ej: "123456.0 CLP")
-                    valor_precio = float(precio_raw.split()[0])
-                except:
-                    valor_precio = 0
-
-                # 3. Solo productos de más de $100.000 (para asegurar que sean estaciones)
-                if valor_precio < 100000:
-                    continue
-
-                # 4. Clasificación por modelo
-                wh, watts_max, nombre_bonito = 256, 300, "EcoFlow River 2"
+            try:
+                # --- VALIDACIÓN DE SEGURIDAD ---
+                # Si falta el título o el link, saltamos este producto
+                el_titulo = item.find('title')
+                el_link = item.find('link')
                 
-                if "PRO 2" in texto_todo or "PRO2" in texto_todo: 
-                    wh, watts_max, nombre_bonito = 4096, 4000, "EcoFlow Delta Pro 2"
-                elif "DELTA 3" in texto_todo: 
-                    wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta 3"
-                elif "DELTA 2" in texto_todo: 
-                    wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta 2"
-                elif "RIVER 2 PRO" in texto_todo: 
-                    wh, watts_max, nombre_bonito = 768, 800, "EcoFlow River 2 Pro"
-                elif "RIVER 2 MAX" in texto_todo: 
-                    wh, watts_max, nombre_bonito = 512, 500, "EcoFlow River 2 Max"
-                elif "DELTA" in texto_todo:
-                    wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta Series"
+                if el_titulo is None or el_link is None:
+                    continue
+                
+                # Extraemos el texto de forma segura
+                titulo_raw = el_titulo.text if el_titulo.text else ""
+                url_producto = el_link.text if el_link.text else "#"
+                
+                # Buscamos el texto en todo el bloque del producto para identificarlo
+                texto_todo = " ".join([elem.text for elem in item.iter() if elem.text]).upper()
+                
+                # --- FILTROS DE MARCA Y ACCESORIOS ---
+                if "ECOFLOW" in texto_todo or "RIVER" in texto_todo or "DELTA" in texto_todo:
+                    if any(x in texto_todo for x in ["TERMO", "MUG", "BOLSO", "CABLE", "FUNDA", "BOLSA", "CHASIS"]):
+                        continue
 
-                # 5. Filtro por potencia del usuario
-                if watts_max >= w_usuario:
-                    duracion = (wh * 0.85) / max(w_usuario, 1)
-                    recomendaciones.append({
-                        "nombre": nombre_bonito,
-                        "duracion_estimada": round(duracion, 1),
-                        "precio": precio_raw,
-                        "url_imagen": item.find('g:image_link', ns).text if item.find('g:image_link', ns) is not None else "",
-                        "url_producto": item.find('link').text,
-                        "wh": wh
-                    })
-                else:
-                    productos_descartados.append(f"{nombre_bonito} (Soporta {watts_max}W)")
+                    # Captura de precio segura
+                    precio_elem = item.find('g:price', ns)
+                    precio_raw = precio_elem.text if (precio_elem is not None and precio_elem.text) else "0 CLP"
+                    
+                    try:
+                        valor_precio = float(precio_raw.split()[0])
+                    except:
+                        valor_precio = 0
+
+                    if valor_precio < 100000:
+                        continue
+
+                    # --- MAPEO DE CAPACIDADES ---
+                    wh, watts_max, nombre_bonito = 256, 300, "EcoFlow River 2"
+                    
+                    if "PRO 2" in texto_todo or "PRO2" in texto_todo: 
+                        wh, watts_max, nombre_bonito = 4096, 4000, "EcoFlow Delta Pro 2"
+                    elif "DELTA 3" in texto_todo: 
+                        wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta 3"
+                    elif "DELTA 2" in texto_todo: 
+                        wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta 2"
+                    elif "RIVER 2 PRO" in texto_todo: 
+                        wh, watts_max, nombre_bonito = 768, 800, "EcoFlow River 2 Pro"
+                    elif "RIVER 2 MAX" in texto_todo: 
+                        wh, watts_max, nombre_bonito = 512, 500, "EcoFlow River 2 Max"
+                    elif "DELTA" in texto_todo:
+                        wh, watts_max, nombre_bonito = 1024, 1800, "EcoFlow Delta Series"
+
+                    # --- FILTRO DE POTENCIA ---
+                    if watts_max >= w_usuario:
+                        duracion = (wh * 0.85) / max(w_usuario, 1)
+                        
+                        img_elem = item.find('g:image_link', ns)
+                        url_imagen = img_elem.text if (img_elem is not None and img_elem.text) else ""
+
+                        recomendaciones.append({
+                            "nombre": nombre_bonito,
+                            "duracion_estimada": round(duracion, 1),
+                            "precio": precio_raw,
+                            "url_imagen": url_imagen,
+                            "url_producto": url_producto,
+                            "wh": wh
+                        })
+            except Exception:
+                # Si un producto individual falla, lo ignoramos y seguimos con el siguiente
+                continue
 
         # Limpiar duplicados y ordenar
         recomendaciones.sort(key=lambda x: x['wh'])
@@ -82,17 +99,11 @@ def calcular():
                 unicos.append(r)
                 vistos.add(r['nombre'])
 
-        print(f"DEBUG: Recomendados: {len(unicos)} | Descartados por potencia: {len(productos_descartados)}")
-        
-        return jsonify({
-            "status": "ok", 
-            "recomendaciones": unicos[:3],
-            "debug_info": {"descartados": productos_descartados[:5]}
-        })
+        return jsonify({"status": "ok", "recomendaciones": unicos[:3]})
 
     except Exception as e:
-        print(f"ERROR: {str(e)}")
-        return jsonify({"status": "error", "mensaje": str(e)}), 500
+        print(f"ERROR CRÍTICO: {str(e)}")
+        return jsonify({"status": "error", "mensaje": "Error procesando el catálogo"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
