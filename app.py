@@ -7,39 +7,28 @@ import xml.etree.ElementTree as ET
 app = Flask(__name__)
 CORS(app)
 
-# Tu feed de productos de Bsale
+# URL del XML de Bsale
 XML_URL = "https://s3.amazonaws.com/bsalemarket/facebook_xml/59518/112_59518.xml"
 
-# Base de datos técnica (Capacidades de los modelos)
-CAPACIDADES_TECNICAS = {
-    "ecoflow river 2": {"cap_wh": 256, "pot_w": 300},
-    "ecoflow river 2 max": {"cap_wh": 512, "pot_w": 500},
-    "Ecoflow river 2 pro": {"cap_wh": 768, "pot_w": 800},
-    "Ecoflow delta 3": {"cap_wh": 1024, "pot_w": 1800},
+# Diccionario técnico de EcoFlow
+CAPACIDADES = {
+    "RIVER 2": {"wh": 256, "watts": 300},
+    "DELTA 2": {"wh": 1024, "watts": 1800},
+    "DELTA PRO": {"wh": 3600, "watts": 3600}
 }
-
-for item in root.findall('.//item'):
-    titulo = item.find('title').text.upper() # Convertimos a mayúsculas para comparar
-    
-    for modelo_buscado, specs in CAPACIDADES.items():
-        if modelo_buscado in titulo: # Verifica si el modelo está "contenido" en el título
-            # ... resto del código para añadir la recomendación ...
 
 @app.route('/calcular', methods=['POST'])
 def calcular():
-    datos = request.json
-    # Cambiamos 'valor' por 'watts' y añadimos 'horas'
-    watts_usuario = float(datos.get('watts', 0))
-    horas_usuario = float(datos.get('horas', 0))
-    
-    if watts_usuario <= 0 or horas_usuario <= 0:
-        return jsonify({"status": "error", "mensaje": "Datos inválidos"}), 400
-
-    energia_necesaria = (watts_usuario * horas_usuario) / 0.85 # 0.85 es margen de eficiencia
-    
     try:
-        # Leemos el XML de Bsale
-        response = requests.get(XML_URL)
+        datos = request.json
+        w_usuario = float(datos.get('watts', 0))
+        h_usuario = float(datos.get('horas', 0))
+        
+        # Cálculo de energía necesaria con margen de seguridad
+        energia_necesaria = (w_usuario * h_usuario) / 0.85
+        
+        # Leer XML de Bsale
+        response = requests.get(XML_URL, timeout=10)
         root = ET.fromstring(response.content)
         namespace = {'g': 'http://base.google.com/ns/1.0'}
         
@@ -48,29 +37,31 @@ def calcular():
         for item in root.findall('.//item'):
             titulo = item.find('title').text.upper()
             
-            for modelo, specs in CAPACIDADES_TECNICAS.items():
+            for modelo, specs in CAPACIDADES.items():
+                # Si el nombre del modelo está dentro del título del producto
                 if modelo in titulo:
-                    # Si el modelo aguanta los Watts y tiene suficiente energía
-                    if specs["pot_w"] >= watts_usuario and specs["cap_wh"] >= energia_necesaria:
-                        duracion = (specs["cap_wh"] * 0.85) / watts_usuario
+                    # Filtramos por potencia y capacidad
+                    if specs["watts"] >= w_usuario and specs["wh"] >= energia_necesaria:
+                        duracion = (specs["wh"] * 0.85) / w_usuario
                         
                         recomendaciones.append({
                             "nombre": item.find('title').text,
-                            "capacidad_wh": specs["cap_wh"],
                             "duracion_estimada": round(duracion, 1),
                             "precio": item.find('g:price', namespace).text,
                             "precio_oferta": item.find('g:sale_price', namespace).text if item.find('g:sale_price', namespace) is not None else None,
                             "url_imagen": item.find('g:image_link', namespace).text,
-                            "url_producto": item.find('link').text
+                            "url_producto": item.find('link').text,
+                            "wh": specs["wh"]
                         })
                         break
         
-        # Ordenar por el más económico (menor capacidad)
-        recomendaciones.sort(key=lambda x: x['capacidad_wh'])
+        # Ordenamos de la más pequeña a la más grande
+        recomendaciones.sort(key=lambda x: x['wh'])
         
         return jsonify({"status": "ok", "recomendaciones": recomendaciones[:2]})
 
     except Exception as e:
+        print(f"Error: {e}")
         return jsonify({"status": "error", "mensaje": str(e)}), 500
 
 if __name__ == '__main__':
