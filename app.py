@@ -12,12 +12,10 @@ XML_URL = "https://s3.amazonaws.com/bsalemarket/facebook_xml/59518/112_59518.xml
 
 # Base de datos técnica (Capacidades de los modelos)
 CAPACIDADES_TECNICAS = {
-    "RIVER 2": {"cap_wh": 256, "pot_w": 300},
-    "RIVER 2 MAX": {"cap_wh": 512, "pot_w": 500},
-    "RIVER 2 PRO": {"cap_wh": 768, "pot_w": 800},
-    "DELTA 2": {"cap_wh": 1024, "pot_w": 1800},
-    "DELTA MAX": {"cap_wh": 1612, "pot_w": 2000},
-    "DELTA PRO": {"cap_wh": 3600, "pot_w": 3600}
+    "ecoflow river 2": {"cap_wh": 256, "pot_w": 300},
+    "ecoflow river 2 max": {"cap_wh": 512, "pot_w": 500},
+    "Ecoflow river 2 pro": {"cap_wh": 768, "pot_w": 800},
+    "Ecoflow delta 3": {"cap_wh": 1024, "pot_w": 1800},
 }
 
 @app.route('/calcular', methods=['POST'])
