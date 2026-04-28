@@ -9,14 +9,15 @@ CORS(app)
 
 XML_URL = "https://s3.amazonaws.com/bsalemarket/facebook_xml/59518/112_59518.xml"
 
-# Diccionario técnico con los nombres estándar
+# BASE DE DATOS ACTUALIZADA SEGÚN TUS LINKS
+# Wh = Capacidad | Watts = Potencia de salida
 CAPACIDADES = [
-    {"key": "DELTA PRO", "wh": 3600, "watts": 3600},
-    {"key": "DELTA MAX", "wh": 1612, "watts": 2000},
-    {"key": "DELTA 2", "wh": 1024, "watts": 1800},
-    {"key": "RIVER 2 PRO", "wh": 768, "watts": 800},
+    {"key": "DELTA PRO 2", "wh": 4096, "watts": 4000}, # Datos estimados Delta Pro 2
+    {"key": "DELTA 3", "wh": 1024, "watts": 1800},     # Datos estimados Delta 3
     {"key": "RIVER 2 MAX", "wh": 512, "watts": 500},
-    {"key": "RIVER 2", "wh": 256, "watts": 300}
+    {"key": "RIVER 2 PRO", "wh": 768, "watts": 800},
+    {"key": "RIVER 2", "wh": 256, "watts": 300},
+    {"key": "DELTA 2", "wh": 1024, "watts": 1800}
 ]
 
 @app.route('/calcular', methods=['POST'])
@@ -26,49 +27,49 @@ def calcular():
         w_usuario = float(datos.get('watts', 0))
         h_usuario = float(datos.get('horas', 0))
         
-        # Simular un navegador para que S3/Bsale no nos bloquee
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(XML_URL, headers=headers, timeout=15)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(XML_URL, headers=headers, timeout=20)
         
         if response.status_code != 200:
-            return jsonify({"status": "error", "mensaje": "Bsale bloqueo la conexion"}), 500
+            return jsonify({"status": "error", "mensaje": "Error de conexion con Bsale"}), 500
 
         root = ET.fromstring(response.content)
         namespace = {'g': 'http://base.google.com/ns/1.0'}
         
         recomendaciones = []
-        productos_revisados = 0
 
         for item in root.findall('.//item'):
             titulo = item.find('title').text.upper()
-            productos_revisados += 1
             
-            # Buscamos coincidencias
-            for mod in CAPACIDADES:
-                if mod["key"] in titulo and "PANEL" not in titulo:
-                    duracion = (mod["wh"] * 0.85) / w_usuario
-                    if mod["watts"] >= w_usuario:
-                        recomendaciones.append({
-                            "nombre": item.find('title').text,
-                            "duracion_estimada": round(duracion, 1),
-                            "precio": item.find('g:price', namespace).text if item.find('g:price', namespace) is not None else "Consultar",
-                            "precio_oferta": item.find('g:sale_price', namespace).text if item.find('g:sale_price', namespace) is not None else None,
-                            "url_imagen": item.find('g:image_link', namespace).text,
-                            "url_producto": item.find('link').text,
-                            "wh": mod["wh"]
-                        })
-                        break
+            # Filtro inteligente: debe ser EcoFlow y no ser un accesorio
+            if "ECOFLOW" in titulo and not any(x in titulo for x in ["PANEL", "SOLAR", "CABLE", "ESTUCHE", "BATERIA EXTRA"]):
+                
+                for mod in CAPACIDADES:
+                    # Buscamos si el modelo está en el título (ej: "RIVER 2 MAX" en "EcoFlow River 2 Max")
+                    if mod["key"] in titulo:
+                        duracion = (mod["wh"] * 0.85) / w_usuario
+                        
+                        # Si la potencia de la estación aguanta el consumo
+                        if mod["watts"] >= w_usuario:
+                            recomendaciones.append({
+                                "nombre": item.find('title').text,
+                                "duracion_estimada": round(duracion, 1),
+                                "precio": item.find('g:price', namespace).text if item.find('g:price', namespace) is not None else "Consultar",
+                                "precio_oferta": item.find('g:sale_price', namespace).text if item.find('g:sale_price', namespace) is not None else None,
+                                "url_imagen": item.find('g:image_link', namespace).text,
+                                "url_producto": item.find('link').text,
+                                "wh": mod["wh"]
+                            })
+                            break 
 
+        # Ordenar por capacidad
         recomendaciones.sort(key=lambda x: x['wh'])
-        
-        # Imprimir en consola de Railway para saber si encontro algo
-        print(f"Productos analizados: {productos_revisados} | Encontrados: {len(recomendaciones)}")
         
         return jsonify({"status": "ok", "recomendaciones": recomendaciones[:3]})
 
     except Exception as e:
         print(f"Error: {e}")
-        return jsonify({"status": "error", "mensaje": str(e)}), 500
+        return jsonify({"status": "error", "mensaje": "Estamos actualizando el catálogo"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
