@@ -18,6 +18,13 @@ CAPACIDADES_TECNICAS = {
     "Ecoflow delta 3": {"cap_wh": 1024, "pot_w": 1800},
 }
 
+for item in root.findall('.//item'):
+    titulo = item.find('title').text.upper() # Convertimos a mayúsculas para comparar
+    
+    for modelo_buscado, specs in CAPACIDADES.items():
+        if modelo_buscado in titulo: # Verifica si el modelo está "contenido" en el título
+            # ... resto del código para añadir la recomendación ...
+
 @app.route('/calcular', methods=['POST'])
 def calcular():
     datos = request.json
