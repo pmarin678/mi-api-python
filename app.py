@@ -7,72 +7,66 @@ import xml.etree.ElementTree as ET
 app = Flask(__name__)
 CORS(app)
 
+# Tu feed de productos de Bsale
 XML_URL = "https://s3.amazonaws.com/bsalemarket/facebook_xml/59518/112_59518.xml"
 
 # Base de datos técnica (Capacidades de los modelos)
 CAPACIDADES_TECNICAS = {
-    "RIVER 2": {"capacidad_wh": 256, "potencia_max_w": 300},
-    "RIVER 2 MAX": {"capacidad_wh": 512, "potencia_max_w": 500},
-    "RIVER 2 PRO": {"capacidad_wh": 768, "potencia_max_w": 800},
-    "DELTA 2": {"capacidad_wh": 1024, "potencia_max_w": 1800},
-    "DELTA MAX": {"capacidad_wh": 1612, "potencia_max_w": 2000},
-    "DELTA PRO": {"capacidad_wh": 3600, "potencia_max_w": 3600}
+    "RIVER 2": {"cap_wh": 256, "pot_w": 300},
+    "RIVER 2 MAX": {"cap_wh": 512, "pot_w": 500},
+    "RIVER 2 PRO": {"cap_wh": 768, "pot_w": 800},
+    "DELTA 2": {"cap_wh": 1024, "pot_w": 1800},
+    "DELTA MAX": {"cap_wh": 1612, "pot_w": 2000},
+    "DELTA PRO": {"cap_wh": 3600, "pot_w": 3600}
 }
-
-def obtener_productos_xml():
-    try:
-        response = requests.get(XML_URL)
-        root = ET.fromstring(response.content)
-        productos_encontrados = []
-
-        # El XML usa el namespace de Google (g:)
-        namespace = {'g': 'http://base.google.com/ns/1.0'}
-
-        for item in root.findall('.//item'):
-            titulo = item.find('title').text.upper()
-            
-            # Filtramos para que solo entren modelos EcoFlow que tengamos en la base técnica
-            for modelo, specs in CAPACIDADES_TECNICAS.items():
-                if modelo in titulo:
-                    productos_encontrados.append({
-                        "nombre": item.find('title').text,
-                        "capacidad_wh": specs["capacidad_wh"],
-                        "potencia_max_w": specs["potencia_max_w"],
-                        "precio": item.find('g:price', namespace).text,
-                        "precio_oferta": item.find('g:sale_price', namespace).text if item.find('g:sale_price', namespace) is not None else None,
-                        "url_imagen": item.find('g:image_link', namespace).text,
-                        "url_producto": item.find('link').text
-                    })
-                    break
-        return productos_encontrados
-    except Exception as e:
-        print(f"Error leyendo XML: {e}")
-        return []
 
 @app.route('/calcular', methods=['POST'])
 def calcular():
     datos = request.json
-    watts = float(datos.get('watts', 0))
-    horas = float(datos.get('horas', 0))
+    # Cambiamos 'valor' por 'watts' y añadimos 'horas'
+    watts_usuario = float(datos.get('watts', 0))
+    horas_usuario = float(datos.get('horas', 0))
     
-    margen_eficiencia = 0.85
-    energia_requerida = (watts * horas) / margen_eficiencia
+    if watts_usuario <= 0 or horas_usuario <= 0:
+        return jsonify({"status": "error", "mensaje": "Datos inválidos"}), 400
+
+    energia_necesaria = (watts_usuario * horas_usuario) / 0.85 # 0.85 es margen de eficiencia
     
-    # Obtenemos datos frescos del XML de Bsale
-    todos_los_productos = obtener_productos_xml()
-    
-    recomendaciones = []
-    for p in todos_los_productos:
-        if p["potencia_max_w"] >= watts and p["capacidad_wh"] >= energia_requerida:
-            # Calcular duración real para este modelo específico
-            duracion = (p["capacidad_wh"] * margen_eficiencia) / watts
-            p["duracion_estimada"] = round(duracion, 1)
-            recomendaciones.append(p)
-    
-    # Ordenar por el más barato/pequeño que sirva
-    recomendaciones.sort(key=lambda x: x['capacidad_wh'])
-    
-    return jsonify({"status": "ok", "recomendaciones": recomendaciones[:2]})
+    try:
+        # Leemos el XML de Bsale
+        response = requests.get(XML_URL)
+        root = ET.fromstring(response.content)
+        namespace = {'g': 'http://base.google.com/ns/1.0'}
+        
+        recomendaciones = []
+        
+        for item in root.findall('.//item'):
+            titulo = item.find('title').text.upper()
+            
+            for modelo, specs in CAPACIDADES_TECNICAS.items():
+                if modelo in titulo:
+                    # Si el modelo aguanta los Watts y tiene suficiente energía
+                    if specs["pot_w"] >= watts_usuario and specs["cap_wh"] >= energia_necesaria:
+                        duracion = (specs["cap_wh"] * 0.85) / watts_usuario
+                        
+                        recomendaciones.append({
+                            "nombre": item.find('title').text,
+                            "capacidad_wh": specs["cap_wh"],
+                            "duracion_estimada": round(duracion, 1),
+                            "precio": item.find('g:price', namespace).text,
+                            "precio_oferta": item.find('g:sale_price', namespace).text if item.find('g:sale_price', namespace) is not None else None,
+                            "url_imagen": item.find('g:image_link', namespace).text,
+                            "url_producto": item.find('link').text
+                        })
+                        break
+        
+        # Ordenar por el más económico (menor capacidad)
+        recomendaciones.sort(key=lambda x: x['capacidad_wh'])
+        
+        return jsonify({"status": "ok", "recomendaciones": recomendaciones[:2]})
+
+    except Exception as e:
+        return jsonify({"status": "error", "mensaje": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
