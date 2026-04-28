@@ -11,21 +11,21 @@ PRODUCTOS_ECOFLOW = [
         "nombre": "EcoFlow River 2 Max",
         "wh": 512,
         "watts_max": 500,
-        "url_imagen": "https://www.awl.cl/static/images/products/ecoflow-river-max-2.jpg", 
+        "url_imagen": "https://dojiw2m9tvv09.cloudfront.net/59518/product/X_river-2-max-ecoflow-ecoflow-chile-chile-estaciones-de-energi-a-respaldo-hogar-respaldo-energi-a-generador-ele-ctrico5806.jpg?498&t=1777408549", 
         "url_producto": "https://www.awl.cl/product/ecoflow-river-max-2"
     },
     {
         "nombre": "EcoFlow Delta 3",
         "wh": 1024,
         "watts_max": 1800,
-        "url_imagen": "https://www.awl.cl/static/images/products/ecoflow-delta-3.jpg",
+        "url_imagen": "https://dojiw2m9tvv09.cloudfront.net/59518/product/X_delta-3-ecoflow-ecoflow-chile-estacion-de-energia-respaldo-hogar-respaldo-energia1223.jpg?498&t=1777408536",
         "url_producto": "https://www.awl.cl/product/ecoflow-delta-3"
     },
     {
         "nombre": "EcoFlow Delta Pro 2",
-        "wh": 4096,
-        "watts_max": 4000,
-        "url_imagen": "https://www.awl.cl/static/images/products/ecoflow-delta-pro-2.jpg",
+        "wh": 3600,
+        "watts_max": 4500,
+        "url_imagen": "https://dojiw2m9tvv09.cloudfront.net/59518/product/X_delta-pro-ecoflow-ecoflowchile-serie-delta-ecoflow-delta-deltaecoflow-chile-28302.jpg?498&t=1777408404",
         "url_producto": "https://www.awl.cl/product/ecoflow-delta-pro-2"
     }
 ]
